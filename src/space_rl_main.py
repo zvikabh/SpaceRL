@@ -72,7 +72,7 @@ def main():
       mass=1.5e34, 
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height / 2),
       velocity=cm.Vector(0, 0),
-      name='planet',
+      name='Earth',
       radius=SCALE*30,
       color=(0, 100, 255),
     ),
@@ -80,7 +80,7 @@ def main():
       mass=3e31,
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.2),
       velocity=cm.Vector(5e7, 0),
-      name='moon',
+      name='Luna',
       radius=SCALE*10,
       color=(128, 128, 128),
     ),
@@ -88,7 +88,7 @@ def main():
       mass=1e6,
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
       velocity=cm.Vector(0, 0),
-      name='spaceship',
+      name='Spaceship-1',
       orientation=math.pi*0.5,
     ),
   ]
@@ -107,19 +107,37 @@ def main():
   )
 
   while True:
+    fire_left, fire_right = False, False
     for event in pg.event.get():
       if event.type == pg.QUIT:
         return
-      if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
-        return
+      if event.type == pg.KEYDOWN:
+        match event.key:
+          case pg.K_ESCAPE:
+            return
+          case pg.K_UP:
+            fire_left, fire_right = True, True
+          case pg.K_LEFT:
+            fire_left = True
+          case pg.K_RIGHT:
+            fire_right = True
       
-    cm.update_positions(space_objects, time_step=SEC_PER_FRAME)
+    collided_objects = cm.update_positions(space_objects, time_step=SEC_PER_FRAME)
+    for collided_obj, larger_object in collided_objects:
+      if isinstance(collided_obj, cm.Spaceship):
+        ship.kill()
+        if collided_obj.velocity.norm < cm.MAX_LANDING_SPEED: 
+          print(f"Victory! You have successfully landed on {larger_object.name} with landing velocity {collided_obj.velocity.norm/1e3:.1f} m/s")
+        else:
+          print(f"Your spaceship has collided with {larger_object.name} with impact velocity {collided_obj.velocity.norm/1e3:.1f} km/s")
+        return
+      else:
+        print(f"{collided_obj.name} has collided with {larger_object.name}")
     all_sprites.update()
     screen.fill(BACKGROUND_COLOR)
     all_sprites.draw(screen)
     pg.display.flip()
     clock.tick(SEC_PER_FRAME * 1000)
-
 
 
 if __name__ == '__main__':
