@@ -9,8 +9,12 @@ import pygame as pg
 
 # Physical constants
 UNIVERSE_RECT = pg.Rect(0, 0, 1280*1e6, 1024*1e6)
-GRAVITATIONAL_CONSTANT = 6e-11
+GRAVITATIONAL_CONSTANT = 1e-20#6e-11
+
+# Spaceship charactersitics
 MAX_LANDING_SPEED = 1000  # m/sec
+SPACESHIP_MASS = 1e6  # kg
+SPACESHIP_THRUST = 1e12  # Newton
 
 
 @dataclasses.dataclass
@@ -59,6 +63,23 @@ class CelestialBody(SpaceObject):
 @dataclasses.dataclass
 class Spaceship(SpaceObject):
   orientation: float  # Radians clockwise from x-axis
+
+  def fire_thrusters(self, left_thruster: bool, right_thruster: bool, time_step: float) -> None:
+    if left_thruster and not right_thruster:
+      self.orientation -= 0.02
+    elif right_thruster and not left_thruster:
+      self.orientation += 0.02
+
+    thrust = (left_thruster + right_thruster)/2 * SPACESHIP_THRUST
+    acceleration = thrust / self.mass
+    delta_v_norm = acceleration * time_step
+    delta_v = Vector(delta_v_norm * math.cos(self.orientation), delta_v_norm * math.sin(self.orientation))
+    self.velocity = self.velocity + delta_v
+
+    # print(f"{left_thruster=}, {right_thruster=}, "
+    #       f"Orientation: {self.orientation*180/math.pi:.0f} degrees, "
+    #       f"delta_v=({delta_v.x:.0f}, {delta_v.y:.0f}), "
+    #       f"v=({self.velocity.x:.0f}, {self.velocity.y:.0f})")
 
 
 def update_positions(

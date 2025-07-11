@@ -40,9 +40,9 @@ class SpaceshipSprite(pg.sprite.Sprite):
     self.image = self.orig_img.copy()
     self.rect = self.image.get_rect()
     self.update()
-  
+
   def update(self):
-    self.image = pg.transform.rotate(self.orig_img, -self.ship.orientation*180/math.pi)
+    self.image = pg.transform.rotate(self.orig_img, -self.ship.orientation*180/math.pi - 90)
     self.rect = self.image.get_rect()
     self.rect.center = (self.ship.position.x / SCALE, self.ship.position.y / SCALE)
 
@@ -85,7 +85,7 @@ def main():
       color=(128, 128, 128),
     ),
     cm.Spaceship(
-      mass=1e6,
+      mass=cm.SPACESHIP_MASS,
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
       velocity=cm.Vector(0, 0),
       name='Spaceship-1',
@@ -107,21 +107,19 @@ def main():
   )
 
   while True:
-    fire_left, fire_right = False, False
     for event in pg.event.get():
       if event.type == pg.QUIT:
         return
-      if event.type == pg.KEYDOWN:
-        match event.key:
-          case pg.K_ESCAPE:
-            return
-          case pg.K_UP:
-            fire_left, fire_right = True, True
-          case pg.K_LEFT:
-            fire_left = True
-          case pg.K_RIGHT:
-            fire_right = True
-      
+      if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+        return
+
+    keys_pressed = pg.key.get_pressed()
+    fire_left = keys_pressed[pg.K_LEFT]
+    fire_right = keys_pressed[pg.K_RIGHT]
+    space_objects[2].fire_thrusters(
+        left_thruster=fire_left, right_thruster=fire_right, time_step=SEC_PER_FRAME
+    )
+
     collided_objects = cm.update_positions(space_objects, time_step=SEC_PER_FRAME)
     for collided_obj, larger_object in collided_objects:
       if isinstance(collided_obj, cm.Spaceship):
