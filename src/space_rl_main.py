@@ -73,7 +73,7 @@ def main():
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height / 2),
       velocity=cm.Vector(0, 0),
       name='Earth',
-      radius=SCALE*30,
+      radius=SCALE*60,
       color=(0, 100, 255),
     ),
     cm.CelestialBody(
@@ -89,7 +89,7 @@ def main():
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
       velocity=cm.Vector(0, 0),
       name='Spaceship-1',
-      orientation=math.pi*0.5,
+      orientation=-math.pi*0.5,
     ),
   ]
   planet = CelestialBodySprite(

@@ -12,9 +12,9 @@ UNIVERSE_RECT = pg.Rect(0, 0, 1280*1e6, 1024*1e6)
 GRAVITATIONAL_CONSTANT = 6e-11
 
 # Spaceship charactersitics
-MAX_LANDING_SPEED = 1000  # m/sec
+MAX_LANDING_SPEED = 10000  # m/sec
 SPACESHIP_MASS = 1e6  # kg
-SPACESHIP_THRUST = 1e12  # Newton
+SPACESHIP_THRUST = 1.2e14  # Newton
 
 
 @dataclasses.dataclass
@@ -66,9 +66,9 @@ class Spaceship(SpaceObject):
 
   def fire_thrusters(self, left_thruster: bool, right_thruster: bool, time_step: float) -> None:
     if left_thruster and not right_thruster:
-      self.orientation -= 0.02
+      self.orientation -= 0.04
     elif right_thruster and not left_thruster:
-      self.orientation += 0.02
+      self.orientation += 0.04
 
     thrust = (left_thruster + right_thruster)/2 * SPACESHIP_THRUST
     acceleration = thrust / self.mass
