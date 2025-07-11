@@ -46,13 +46,18 @@ class SpaceObject:
   mass: float
   position: Vector  # meters
   velocity: Vector  # meters/sec
+  name: str
 
 
 @dataclasses.dataclass
 class CelestialBody(SpaceObject):
-  name: str
   radius: float  # meters
   color: tuple[int, int, int]
+
+
+@dataclasses.dataclass
+class Spaceship(SpaceObject):
+  orientation: float  # Radians clockwise from x-axis
 
 
 def update_positions(objects: Sequence[SpaceObject], time_step: float) -> None:
@@ -61,6 +66,8 @@ def update_positions(objects: Sequence[SpaceObject], time_step: float) -> None:
     for j, other_obj in enumerate(objects):
       if i == j:
         continue
+      if this_obj.mass > 1e6 * other_obj.mass:
+        continue  # negligible gravitational effect
       delta: Vector = other_obj.position - this_obj.position
       cur_accel = (GRAVITATIONAL_CONSTANT * other_obj.mass / delta.norm / delta.squared_norm) * delta
       total_accel = total_accel + cur_accel
