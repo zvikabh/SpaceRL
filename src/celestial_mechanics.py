@@ -9,7 +9,7 @@ import pygame as pg
 
 # Physical constants
 UNIVERSE_RECT = pg.Rect(0, 0, 1280*1e6, 1024*1e6)
-GRAVITATIONAL_CONSTANT = 1e-20#6e-11
+GRAVITATIONAL_CONSTANT = 6e-11
 
 # Spaceship charactersitics
 MAX_LANDING_SPEED = 1000  # m/sec
