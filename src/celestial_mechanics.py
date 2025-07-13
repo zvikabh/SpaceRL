@@ -17,6 +17,17 @@ SPACESHIP_MASS = 1e6  # kg
 SPACESHIP_THRUST = 1.2e14  # Newton
 
 
+class CollisionException(Exception):
+  """Raised by an object if it has collided with another obejct."""
+  
+  def __init__(self, smaller_obj: 'SpaceObject', larger_obj: 'SpaceObject') -> None:
+    self.smaller_obj = smaller_obj
+    self.larger_obj = larger_obj
+  
+  def __str__(self):
+    return f"{self.smaller_obj.name} has collided with {self.larger_obj.name}"
+
+
 @dataclasses.dataclass
 class Vector:
   x: float
@@ -53,6 +64,35 @@ class SpaceObject:
   velocity: Vector  # meters/sec
   name: str
 
+  def update_self(self, all_objects: Sequence['SpaceObject'], time_step: float) -> None:
+    """
+    Updates the position of this object.
+    Raises a CollisionException if the object has collided with a larger object.
+    """
+    total_accel = Vector(0., 0.)
+    for other_obj in all_objects:
+      if other_obj == self:
+        continue
+      delta: Vector = other_obj.position - self.position
+
+      # Check for collision
+      if isinstance(other_obj, CelestialBody) and self.mass < other_obj.mass:
+        if isinstance(self, CelestialBody):
+          collision_dist = other_obj.radius + self.radius
+        else:
+          collision_dist = other_obj.radius
+        if delta.squared_norm <= collision_dist*collision_dist:
+          raise CollisionException(self, other_obj)
+
+      # Apply gravitational pull
+      if self.mass > 1e6 * other_obj.mass:
+        continue  # negligible gravitational effect
+      cur_accel = (GRAVITATIONAL_CONSTANT * other_obj.mass / delta.norm / delta.squared_norm) * delta
+      total_accel = total_accel + cur_accel
+
+    self.velocity = self.velocity + total_accel * time_step
+    self.position = self.position + self.velocity * time_step
+
 
 @dataclasses.dataclass
 class CelestialBody(SpaceObject):
@@ -62,51 +102,42 @@ class CelestialBody(SpaceObject):
 
 @dataclasses.dataclass
 class Spaceship(SpaceObject):
-  orientation: float  # Radians clockwise from x-axis
+  angle: float  # Radians clockwise from x-axis
+  angular_velocity: float  # Radians per second
+
+  def update_self(self, all_objects, time_step):
+    self.angle += self.angular_velocity * time_step
+    super().update_self(all_objects, time_step)
 
   def fire_thrusters(self, left_thruster: bool, right_thruster: bool, time_step: float) -> None:
     if left_thruster and not right_thruster:
-      self.orientation -= 0.04
+      self.angular_velocity -= 0.05
     elif right_thruster and not left_thruster:
-      self.orientation += 0.04
+      self.angular_velocity += 0.05
 
     thrust = (left_thruster + right_thruster)/2 * SPACESHIP_THRUST
     acceleration = thrust / self.mass
     delta_v_norm = acceleration * time_step
-    delta_v = Vector(delta_v_norm * math.cos(self.orientation), delta_v_norm * math.sin(self.orientation))
+    delta_v = Vector(delta_v_norm * math.cos(self.angle), delta_v_norm * math.sin(self.angle))
     self.velocity = self.velocity + delta_v
 
     # print(f"{left_thruster=}, {right_thruster=}, "
-    #       f"Orientation: {self.orientation*180/math.pi:.0f} degrees, "
+    #       f"Angle: {self.angle*180/math.pi:.0f} degrees, "
     #       f"delta_v=({delta_v.x:.0f}, {delta_v.y:.0f}), "
     #       f"v=({self.velocity.x:.0f}, {self.velocity.y:.0f})")
 
 
 def update_positions(
     objects: Sequence[SpaceObject], time_step: float
-) -> list[tuple[SpaceObject, SpaceObject]]:
+) -> list[CollisionException]:
   """
   Updates positions of all space objects.
-  Returns a list of collided object tuples (smaller object first).
+  Returns a list of collided objects.
   """
   collided_objects = []
-  for i, this_obj in enumerate(objects):
-    total_accel = Vector(0., 0.)
-    for j, other_obj in enumerate(objects):
-      if i == j:
-        continue
-      delta: Vector = other_obj.position - this_obj.position
-      if isinstance(other_obj, CelestialBody) and this_obj.mass < other_obj.mass:
-        if isinstance(this_obj, CelestialBody):
-          collision_dist = other_obj.radius + this_obj.radius
-        else:
-          collision_dist = other_obj.radius
-        if delta.squared_norm <= collision_dist*collision_dist:
-          collided_objects.append((this_obj, other_obj))
-      if this_obj.mass > 1e6 * other_obj.mass:
-        continue  # negligible gravitational effect
-      cur_accel = (GRAVITATIONAL_CONSTANT * other_obj.mass / delta.norm / delta.squared_norm) * delta
-      total_accel = total_accel + cur_accel
-    this_obj.velocity = this_obj.velocity + total_accel * time_step
-    this_obj.position = this_obj.position + this_obj.velocity * time_step
+  for this_obj in objects:
+    try:
+      this_obj.update_self(objects, time_step)
+    except CollisionException as ex:
+      collided_objects.append(ex)
   return collided_objects

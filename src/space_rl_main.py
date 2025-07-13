@@ -42,7 +42,7 @@ class SpaceshipSprite(pg.sprite.Sprite):
     self.update()
 
   def update(self):
-    self.image = pg.transform.rotate(self.orig_img, -self.ship.orientation*180/math.pi - 90)
+    self.image = pg.transform.rotate(self.orig_img, -self.ship.angle*180/math.pi - 90)
     self.rect = self.image.get_rect()
     self.rect.center = (self.ship.position.x / SCALE, self.ship.position.y / SCALE)
 
@@ -89,7 +89,8 @@ def main():
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
       velocity=cm.Vector(0, 0),
       name='Spaceship-1',
-      orientation=-math.pi*0.5,
+      angle=-math.pi*0.5,
+      angular_velocity=0,
     ),
   ]
   planet = CelestialBodySprite(
@@ -121,16 +122,16 @@ def main():
     )
 
     collided_objects = cm.update_positions(space_objects, time_step=SEC_PER_FRAME)
-    for collided_obj, larger_object in collided_objects:
-      if isinstance(collided_obj, cm.Spaceship):
+    for collision_ex in collided_objects:
+      if isinstance(collision_ex.smaller_obj, cm.Spaceship):
         ship.kill()
-        if collided_obj.velocity.norm < cm.MAX_LANDING_SPEED: 
-          print(f"Victory! You have successfully landed on {larger_object.name} with landing velocity {collided_obj.velocity.norm/1e3:.1f} m/s")
+        if collision_ex.smaller_obj.velocity.norm < cm.MAX_LANDING_SPEED: 
+          print(f"Victory! You have successfully landed on {collision_ex.larger_obj.name} with landing velocity {collision_ex.smaller_obj.velocity.norm/1e3:.1f} m/s")
         else:
-          print(f"Your spaceship has collided with {larger_object.name} with impact velocity {collided_obj.velocity.norm/1e3:.1f} km/s")
+          print(f"Your spaceship has collided with {collision_ex.larger_obj.name} with impact velocity {collision_ex.smaller_obj.velocity.norm/1e3:.1f} km/s")
         return
       else:
-        print(f"{collided_obj.name} has collided with {larger_object.name}")
+        print(collision_ex)
     all_sprites.update()
     screen.fill(BACKGROUND_COLOR)
     all_sprites.draw(screen)
