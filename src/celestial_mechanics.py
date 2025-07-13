@@ -16,6 +16,9 @@ MAX_LANDING_SPEED = 10000  # m/sec
 SPACESHIP_MASS = 1e6  # kg
 SPACESHIP_THRUST = 1.2e14  # Newton
 
+# RL constants
+DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
+
 
 class CollisionException(Exception):
   """Raised by an object if it has collided with another obejct."""
@@ -105,7 +108,7 @@ class Spaceship(SpaceObject):
   angle: float  # Radians clockwise from x-axis
   angular_velocity: float  # Radians per second
 
-  def update_self(self, all_objects, time_step):
+  def update_self(self, all_objects: Sequence[SpaceObject], time_step: float) -> None:
     self.angle += self.angular_velocity * time_step
     super().update_self(all_objects, time_step)
 
@@ -127,17 +130,36 @@ class Spaceship(SpaceObject):
     #       f"v=({self.velocity.x:.0f}, {self.velocity.y:.0f})")
 
 
-def update_positions(
-    objects: Sequence[SpaceObject], time_step: float
-) -> list[CollisionException]:
-  """
-  Updates positions of all space objects.
-  Returns a list of collided objects.
-  """
-  collided_objects = []
-  for this_obj in objects:
-    try:
-      this_obj.update_self(objects, time_step)
-    except CollisionException as ex:
-      collided_objects.append(ex)
-  return collided_objects
+@dataclasses.dataclass
+class State:
+  spaceship: Spaceship
+  target: CelestialBody
+  other_objects: list[SpaceObject]
+  rl_return: float = 0.
+  rl_discounted_return: float = 0.
+  n_updates: int = 0
+
+  @property
+  def all_objects(self) -> Sequence[SpaceObject]:
+    return [self.spaceship, self.target] + self.other_objects
+
+  def update_positions(self, time_step: float) -> list[CollisionException]:
+    """
+    Updates positions of all space objects.
+    Returns a list of collided objects.
+    """
+    self.n_updates += 1
+    collided_objects = []
+    for this_obj in self.all_objects:
+      try:
+        this_obj.update_self(self.all_objects, time_step)
+      except CollisionException as ex:
+        collided_objects.append(ex)
+    return collided_objects
+
+  def update_returns(self, time_step: float) -> float:
+    dist = (self.spaceship.position - self.target.position).norm
+    reward_per_sec = 1e6 / dist
+    reward = reward_per_sec * time_step
+    self.rl_return += reward
+    self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
