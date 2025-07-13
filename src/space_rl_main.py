@@ -32,7 +32,7 @@ def build_state() -> cm.State:
     ),
     other_objects=[
       cm.CelestialBody(
-        mass=5e32,
+        mass=1e33,
         position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.2),
         velocity=cm.Vector(5e7, 0),
         name='Luna',
@@ -48,7 +48,6 @@ def build_state() -> cm.State:
 
 def graphics_loop(state: cm.State) -> None:
   screen = sprites.setup_screen()
-  rocket_img = sprites.setup_rocket_img()
   clock = pg.time.Clock()
 
   fast_update_sprites = pg.sprite.Group()
@@ -64,7 +63,6 @@ def graphics_loop(state: cm.State) -> None:
     ),
     sprites.SpaceshipSprite(
       spaceship=state.spaceship,
-      rocket_img=rocket_img,
       sprite_groups=[fast_update_sprites],
     ),
     sprites.InfoboxSprite(
@@ -87,8 +85,8 @@ def graphics_loop(state: cm.State) -> None:
     keys_pressed = pg.key.get_pressed()
     fire_left = keys_pressed[pg.K_LEFT]
     fire_right = keys_pressed[pg.K_RIGHT]
-    state.spaceship.fire_thrusters(
-        left_thruster=fire_left, right_thruster=fire_right, time_step=SEC_PER_FRAME
+    state.spaceship.apply_action(
+        cm.Action(left_thruster=fire_left, right_thruster=fire_right), time_step=SEC_PER_FRAME
     )
 
     celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)

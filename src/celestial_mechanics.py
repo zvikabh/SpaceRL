@@ -3,7 +3,7 @@
 import dataclasses
 import datetime
 import math
-from typing import Sequence
+from typing import Optional, Sequence
 
 import pygame as pg
 
@@ -129,21 +129,29 @@ class CelestialBody(SpaceObject):
 
 
 @dataclasses.dataclass
+class Action:
+  left_thruster: bool
+  right_thruster: bool
+
+
+@dataclasses.dataclass
 class Spaceship(SpaceObject):
   angle: float  # Radians clockwise from x-axis
   angular_velocity: float  # Radians per second
+  last_action: Optional[Action] = None  # used for plotting the thruster flames
 
   def update_self(self, all_objects: Sequence[SpaceObject], time_step: float) -> None:
     self.angle += self.angular_velocity * time_step
     super().update_self(all_objects, time_step)
 
-  def fire_thrusters(self, left_thruster: bool, right_thruster: bool, time_step: float) -> None:
-    if left_thruster and not right_thruster:
+  def apply_action(self, action: Action, time_step: float) -> None:
+    self.last_action = action
+    if action.left_thruster and not action.right_thruster:
       self.angular_velocity -= 0.05
-    elif right_thruster and not left_thruster:
+    elif action.right_thruster and not action.left_thruster:
       self.angular_velocity += 0.05
 
-    thrust = (left_thruster + right_thruster)/2 * SPACESHIP_THRUST
+    thrust = (action.left_thruster + action.right_thruster)/2 * SPACESHIP_THRUST
     acceleration = thrust / self.mass
     delta_v_norm = acceleration * time_step
     delta_v = Vector(delta_v_norm * math.cos(self.angle), delta_v_norm * math.sin(self.angle))

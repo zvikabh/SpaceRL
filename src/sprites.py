@@ -33,18 +33,32 @@ class CelestialBodySprite(pg.sprite.Sprite):
 
 class SpaceshipSprite(pg.sprite.Sprite):
 
-  def __init__(self, spaceship: cm.Spaceship, rocket_img: pg.Surface, sprite_groups: Sequence[pg.sprite.Group]):
+  def __init__(self, spaceship: cm.Spaceship, sprite_groups: Sequence[pg.sprite.Group]):
     super().__init__(*sprite_groups)
     self.ship = spaceship
-    self.orig_img = rocket_img
-    self.image = self.orig_img.copy()
+    self._setup_rocket_imgs()
+    self.image = self.orig_imgs[0].copy()
     self.rect = self.image.get_rect()
     self.update()
 
   def update(self):
-    self.image = pg.transform.rotate(self.orig_img, -self.ship.angle * 180 / math.pi - 90)
+    if self.ship.last_action:
+      which_img = self.ship.last_action.right_thruster * 2 + self.ship.last_action.left_thruster
+    else:
+      which_img = 0
+    self.image = pg.transform.rotate(self.orig_imgs[which_img], -self.ship.angle * 180 / math.pi - 90)
     self.rect = self.image.get_rect()
     self.rect.center = (self.ship.position.x / SCALE, self.ship.position.y / SCALE)
+
+  def _setup_rocket_imgs(self) -> None:
+    main_dir = os.path.split(os.path.abspath(__file__))[0]
+    self.orig_imgs = []
+    for filename in ['rocket.png', 'rocket_left.png', 'rocket_right.png', 'rocket_both.png']:
+      rocket_img = pg.image.load(os.path.join(main_dir, 'res', filename)).convert()
+      original_size = rocket_img.get_size()
+      scale_factor = min(30 / original_size[0], 30 / original_size[1])
+      new_size = (original_size[0] * scale_factor, original_size[1] * scale_factor)
+      self.orig_imgs.append(pg.transform.smoothscale(rocket_img, new_size))
 
 
 class InfoboxSprite(pg.sprite.Sprite):
@@ -92,12 +106,3 @@ def setup_screen() -> pg.Surface:
   winstyle = 0  # | pg.FULLSCREEN
   best_depth = pg.display.mode_ok(SCREEN_RECT.size, winstyle, 32)
   return pg.display.set_mode(SCREEN_RECT.size, winstyle, best_depth)
-
-
-def setup_rocket_img() -> pg.Surface:
-  main_dir = os.path.split(os.path.abspath(__file__))[0]
-  rocket_img = pg.image.load(os.path.join(main_dir, 'res', 'rocket.png')).convert()
-  original_size = rocket_img.get_size()
-  scale_factor = min(30 / original_size[0], 30 / original_size[1])
-  new_size = (original_size[0] * scale_factor, original_size[1] * scale_factor)
-  return pg.transform.smoothscale(rocket_img, new_size)
