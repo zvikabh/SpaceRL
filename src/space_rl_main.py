@@ -1,3 +1,4 @@
+import datetime
 import math
 from typing import cast
 
@@ -8,6 +9,7 @@ import sprites
 
 
 SEC_PER_FRAME = 0.04
+EPISODE_TIME = datetime.timedelta(seconds=60)
 
 
 def build_state() -> cm.State:
@@ -77,6 +79,10 @@ def graphics_loop(state: cm.State) -> None:
         return
       if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
         return
+
+    if state.time > EPISODE_TIME:
+      print(f"Episode ended after {EPISODE_TIME}")
+      return
 
     keys_pressed = pg.key.get_pressed()
     fire_left = keys_pressed[pg.K_LEFT]

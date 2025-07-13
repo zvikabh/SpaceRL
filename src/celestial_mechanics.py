@@ -1,6 +1,7 @@
 """Classes and functions for computing motion of celestial bodies."""
 
 import dataclasses
+import datetime
 import math
 from typing import Sequence
 
@@ -154,6 +155,7 @@ class State:
   spaceship: Spaceship
   target: CelestialBody
   other_objects: list[SpaceObject]
+  time: datetime.timedelta = datetime.timedelta(seconds=0)
   rl_return: float = 0.
   rl_discounted_return: float = 0.
   n_updates: int = 0
@@ -168,6 +170,7 @@ class State:
     Returns a list of celestial exceptions (objects lost in space or collided).
     """
     self.n_updates += 1
+    self.time += datetime.timedelta(seconds=time_step)
     celestial_exceptions = []
     for this_obj in self.all_objects:
       try:

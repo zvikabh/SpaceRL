@@ -1,6 +1,6 @@
+import datetime
 import math
 import os
-import time
 from typing import Sequence
 
 import pygame as pg
@@ -48,7 +48,7 @@ class SpaceshipSprite(pg.sprite.Sprite):
 
 
 class InfoboxSprite(pg.sprite.Sprite):
-  NUM_LINES = 4
+  NUM_LINES = 5
   LINE_HEIGHT = 20
   LINE_WIDTH = 250
 
@@ -71,14 +71,16 @@ class InfoboxSprite(pg.sprite.Sprite):
     self.blit_text_line(f"Velocity: {self.state.spaceship.velocity.norm / 1000:.0f} km/s", 1)
     dist_from_target = (self.state.spaceship.position - self.state.target.position).norm
     self.blit_text_line(f"Distance from Target: {dist_from_target / 1000:.0f} km", 2)
+    rounded_time = datetime.timedelta(seconds=int(self.state.time.total_seconds()))
+    self.blit_text_line(f"Time: {rounded_time}", 4)
     if self.last_update_time:
-      cur_time = time.time()
-      fps = (self.state.n_updates - self.last_shown_frame) / (cur_time - self.last_update_time)
+      cur_time = datetime.datetime.now()
+      fps = (self.state.n_updates - self.last_shown_frame) / (cur_time - self.last_update_time).total_seconds()
       self.blit_text_line(f"FPS: {fps:.1f}", 3)
       self.last_update_time = cur_time
       self.last_shown_frame = self.state.n_updates
     else:
-      self.last_update_time = time.time()
+      self.last_update_time = datetime.datetime.now()
 
   def blit_text_line(self, text: str, n_row: int):
     surf = self.font.render(text, True, self.color)
