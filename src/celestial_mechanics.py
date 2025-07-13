@@ -20,15 +20,35 @@ SPACESHIP_THRUST = 1.2e14  # Newton
 DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
 
 
-class CollisionException(Exception):
+class CelestialException(Exception):
+  """Catastrophic occurrence for one of the space objects."""
+
+  def __init__(self, obj: 'SpaceObject') -> None:
+    self.obj = obj
+
+
+class CollisionException(CelestialException):
   """Raised by an object if it has collided with another obejct."""
   
   def __init__(self, smaller_obj: 'SpaceObject', larger_obj: 'SpaceObject') -> None:
-    self.smaller_obj = smaller_obj
+    super().__init__(smaller_obj)
     self.larger_obj = larger_obj
   
-  def __str__(self):
-    return f"{self.smaller_obj.name} has collided with {self.larger_obj.name}"
+  def __str__(self) -> str:
+    return (
+      f"{self.obj.name} has collided with {self.larger_obj.name} "
+      f"with impact velocity {self.obj.velocity.norm/1e3:.0f} km/s."
+    )
+
+
+class LostInSpaceException(CelestialException):
+  """Raised by an object if it has gone beyond the bounds of the known universe."""
+
+  def __init__(self, obj: 'SpaceObject') -> None:
+    super().__init__(obj)
+
+  def __str__(self) -> str:
+    return f"{self.obj.name} has been lost in space."
 
 
 @dataclasses.dataclass
@@ -96,6 +116,10 @@ class SpaceObject:
     self.velocity = self.velocity + total_accel * time_step
     self.position = self.position + self.velocity * time_step
 
+    if (self.position.x < 0 or self.position.y < 0 or
+        self.position.x > UNIVERSE_RECT.width or self.position.y > UNIVERSE_RECT.height):
+      raise LostInSpaceException(self)
+
 
 @dataclasses.dataclass
 class CelestialBody(SpaceObject):
@@ -138,21 +162,21 @@ class State:
   def all_objects(self) -> Sequence[SpaceObject]:
     return [self.spaceship, self.target] + self.other_objects
 
-  def update_positions(self, time_step: float) -> list[CollisionException]:
+  def update_positions(self, time_step: float) -> list[CelestialException]:
     """
     Updates positions of all space objects.
-    Returns a list of collided objects.
+    Returns a list of celestial exceptions (objects lost in space or collided).
     """
     self.n_updates += 1
-    collided_objects = []
+    celestial_exceptions = []
     for this_obj in self.all_objects:
       try:
         this_obj.update_self(self.all_objects, time_step)
-      except CollisionException as ex:
-        collided_objects.append(ex)
-    return collided_objects
+      except CelestialException as ex:
+        celestial_exceptions.append(ex)
+    return celestial_exceptions
 
-  def update_returns(self, time_step: float) -> float:
+  def update_returns(self, time_step: float) -> None:
     dist = (self.spaceship.position - self.target.position).norm
     reward_per_sec = 1e6 / dist
     reward = reward_per_sec * time_step

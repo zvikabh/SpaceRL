@@ -10,42 +10,47 @@ import sprites
 SEC_PER_FRAME = 0.04
 
 
-def main():
-  screen = sprites.setup_screen()
-  rocket_img = sprites.setup_rocket_img()
-  clock = pg.time.Clock()
+def build_state() -> cm.State:
   state = cm.State(
     spaceship=cm.Spaceship(
       mass=cm.SPACESHIP_MASS,
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
       velocity=cm.Vector(0, 0),
       name='Spaceship',
-      angle=-math.pi*0.5,
+      angle=-math.pi * 0.5,
       angular_velocity=0,
     ),
     target=cm.CelestialBody(
-      mass=1.5e34, 
+      mass=1.5e34,
       position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height / 2),
       velocity=cm.Vector(0, 0),
       name='Earth',
-      radius=sprites.SCALE*60,
+      radius=sprites.SCALE * 60,
       color=(0, 100, 255),
     ),
     other_objects=[
       cm.CelestialBody(
-        mass=3e31,
+        mass=5e32,
         position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.2),
         velocity=cm.Vector(5e7, 0),
         name='Luna',
-        radius=sprites.SCALE*10,
+        radius=sprites.SCALE * 20,
         color=(128, 128, 128),
       ),
     ]
   )
+  # Keep the center of mass stationary
+  state.target.velocity = state.other_objects[0].velocity * (-state.other_objects[0].mass / state.target.mass)
+  return state
+
+
+def graphics_loop(state: cm.State) -> None:
+  screen = sprites.setup_screen()
+  rocket_img = sprites.setup_rocket_img()
+  clock = pg.time.Clock()
 
   fast_update_sprites = pg.sprite.Group()
   slow_update_sprites = pg.sprite.Group()
-
   all_sprites = [
     sprites.CelestialBodySprite(body=cast(cm.CelestialBody, body), sprite_groups=[fast_update_sprites])
     for body in state.other_objects
@@ -80,21 +85,12 @@ def main():
         left_thruster=fire_left, right_thruster=fire_right, time_step=SEC_PER_FRAME
     )
 
-    collided_objects = state.update_positions(time_step=SEC_PER_FRAME)
+    celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)
     state.update_returns(time_step=SEC_PER_FRAME)
-    for collision_ex in collided_objects:
-      if isinstance(collision_ex.smaller_obj, cm.Spaceship):
-        if collision_ex.smaller_obj.velocity.norm < cm.MAX_LANDING_SPEED: 
-          print(
-            f"Victory! You have successfully landed on {collision_ex.larger_obj.name} "
-            f"with landing velocity {collision_ex.smaller_obj.velocity.norm/1e3:.1f} m/s")
-        else:
-          print(f"Your spaceship has collided with {collision_ex.larger_obj.name} "
-                f"with impact velocity {collision_ex.smaller_obj.velocity.norm/1e3:.1f} km/s")
-        print(f"Final returns: {state.rl_return:.3f}")
+    for collision_ex in celestial_exceptions:
+      print(collision_ex)
+      if isinstance(collision_ex.obj, cm.Spaceship):
         return
-      else:
-        print(collision_ex)
     fast_update_sprites.update()
     if state.n_updates % 10 == 0:
       slow_update_sprites.update()
@@ -103,6 +99,12 @@ def main():
     slow_update_sprites.draw(screen)
     pg.display.flip()
     clock.tick(SEC_PER_FRAME * 1000)
+
+
+def main():
+  state = build_state()
+  graphics_loop(state)
+  print(f"Final return: {state.rl_return:.3f}")
 
 
 if __name__ == '__main__':
