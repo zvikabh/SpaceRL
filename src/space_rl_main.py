@@ -83,11 +83,8 @@ def graphics_loop(state: cm.State) -> None:
       return
 
     keys_pressed = pg.key.get_pressed()
-    fire_left = keys_pressed[pg.K_LEFT]
-    fire_right = keys_pressed[pg.K_RIGHT]
-    state.spaceship.apply_action(
-        cm.Action(left_thruster=fire_left, right_thruster=fire_right), time_step=SEC_PER_FRAME
-    )
+    action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
+    state.spaceship.apply_action(action, time_step=SEC_PER_FRAME)
 
     celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)
     state.update_returns(time_step=SEC_PER_FRAME)
