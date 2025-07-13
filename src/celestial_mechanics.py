@@ -124,11 +124,6 @@ class Spaceship(SpaceObject):
     delta_v = Vector(delta_v_norm * math.cos(self.angle), delta_v_norm * math.sin(self.angle))
     self.velocity = self.velocity + delta_v
 
-    # print(f"{left_thruster=}, {right_thruster=}, "
-    #       f"Angle: {self.angle*180/math.pi:.0f} degrees, "
-    #       f"delta_v=({delta_v.x:.0f}, {delta_v.y:.0f}), "
-    #       f"v=({self.velocity.x:.0f}, {self.velocity.y:.0f})")
-
 
 @dataclasses.dataclass
 class State:
