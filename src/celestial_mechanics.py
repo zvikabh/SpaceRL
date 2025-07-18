@@ -12,6 +12,7 @@ import pygame as pg
 
 # Physical constants
 UNIVERSE_RECT = pg.Rect(0, 0, 1280*1e6, 1024*1e6)
+UNIVERSE_SIZE = max(UNIVERSE_RECT.width, UNIVERSE_RECT.height)
 GRAVITATIONAL_CONSTANT = 6e-11
 
 # Spaceship charactersitics
@@ -82,6 +83,10 @@ class Vector:
   def norm(self) -> float:
     return math.sqrt(self.squared_norm)
 
+  def to_vector(self) -> list[float]:
+    # Normalize to [0,1] while keeping pixels square.
+    return [self.x, self.y]
+
 
 @dataclasses.dataclass
 class SpaceObject:
@@ -89,6 +94,11 @@ class SpaceObject:
   position: Vector  # meters
   velocity: Vector  # meters/sec
   name: str
+
+  def to_vector(self) -> list[float]:
+    normalized_pos = self.position / UNIVERSE_SIZE
+    normalized_v = self.velocity / 1e9
+    return normalized_pos.to_vector() + normalized_v.to_vector()
 
   def update_self(self, all_objects: Sequence['SpaceObject'], time_step: float) -> None:
     """
@@ -150,6 +160,9 @@ class Spaceship(SpaceObject):
   angular_velocity: float  # Radians per second
   last_action: Optional[Action] = None  # used for plotting the thruster flames
 
+  def to_vector(self) -> list[float]:
+    return super().to_vector() + [self.angle % (2*math.pi), self.angular_velocity]
+
   def update_self(self, all_objects: Sequence[SpaceObject], time_step: float) -> None:
     self.angle += self.angular_velocity * time_step
     super().update_self(all_objects, time_step)
@@ -182,6 +195,11 @@ class State:
   def all_objects(self) -> Sequence[SpaceObject]:
     return [self.spaceship, self.target] + self.other_objects
 
+  def to_vector(self) -> list[float]:
+    """Returns a vector containing normalized, RL-relevant portions of the state."""
+    objects_state = sum((obj.to_vector() for obj in self.all_objects), start=[])
+    return objects_state + [self.time.total_seconds() / 60]
+
   def update_positions(self, time_step: float) -> list[CelestialException]:
     """
     Updates positions of all space objects.
@@ -197,10 +215,15 @@ class State:
         celestial_exceptions.append(ex)
     return celestial_exceptions
 
-  def update_returns(self, time_step: float) -> None:
+  def update_returns(self, celestial_exceptions: Sequence[CelestialException], time_step: float) -> None:
     dist = (self.spaceship.position - self.target.position).norm
     reward_per_sec = 1e6 / dist
     reward = reward_per_sec * time_step
+
+    for collision_ex in celestial_exceptions:
+      if isinstance(collision_ex.obj, Spaceship):
+        reward -= 100  # Spaceship lost.
+
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
 

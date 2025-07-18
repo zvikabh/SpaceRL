@@ -91,7 +91,6 @@ def game_loop(
     ])
 
   actions_taken = []
-  n_frames = 0
   while True:
     if with_graphics:
       for event in pg.event.get():
@@ -105,7 +104,7 @@ def game_loop(
       return cm.EpisodeTerminationReason.REACHED_TIME_LIMIT, actions_taken
 
     if recorded_actions:
-      action = recorded_actions[n_frames]
+      action = recorded_actions[state.n_updates]
     else:
       keys_pressed = pg.key.get_pressed()
       action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
@@ -114,7 +113,7 @@ def game_loop(
     state.spaceship.apply_action(action, time_step=SEC_PER_FRAME)
 
     celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)
-    state.update_returns(time_step=SEC_PER_FRAME)
+    state.update_returns(celestial_exceptions, time_step=SEC_PER_FRAME)
     for collision_ex in celestial_exceptions:
       print(collision_ex)
       if isinstance(collision_ex.obj, cm.Spaceship):
@@ -135,8 +134,6 @@ def game_loop(
       slow_update_sprites.draw(screen)
       pg.display.flip()
       clock.tick(SEC_PER_FRAME * 1000)
-
-    n_frames += 1
 
 
 def main():
