@@ -2,8 +2,9 @@
 
 import dataclasses
 import datetime
+import enum
 import math
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import pygame as pg
 
@@ -133,6 +134,9 @@ class Action:
   left_thruster: bool
   right_thruster: bool
 
+  def to_char(self) -> str:
+    return str(self.left_thruster * 2 + self.right_thruster)
+
 
 @dataclasses.dataclass
 class Spaceship(SpaceObject):
@@ -193,3 +197,37 @@ class State:
     reward = reward_per_sec * time_step
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
+
+
+class EpisodeTerminationReason(enum.Enum):
+  USER_ABORT = 'user_abort'
+  SPACESHIP_COLLISION = 'spaceship_collision'
+  SPACESHIP_LOST = 'spaceship_lost'
+  REACHED_TIME_LIMIT = 'reached_time_limit'
+
+
+def _dict_factory(fields):
+  """Custom dict factory that converts timedelta objects to seconds."""
+  result = {}
+  for key, value in fields:
+    if isinstance(value, datetime.timedelta):
+      result[key] = value.total_seconds()
+    else:
+      result[key] = value
+  return result
+
+
+@dataclasses.dataclass
+class RecordedEpisode:
+  initial_state: State
+  final_state: State
+  actions_taken: list[Action]
+  termination_reason: EpisodeTerminationReason
+
+  def to_json_dict(self) -> dict[str, Any]:
+    return {
+      'initial_state': dataclasses.asdict(self.initial_state, dict_factory=_dict_factory),
+      'final_state': dataclasses.asdict(self.final_state, dict_factory=_dict_factory),
+      'actions_taken': ''.join(action.to_char() for action in self.actions_taken),
+      'termination_reason': self.termination_reason.name
+    }

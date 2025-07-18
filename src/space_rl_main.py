@@ -1,4 +1,7 @@
+import argparse
+import copy
 import datetime
+import json
 import math
 from typing import cast
 
@@ -46,7 +49,7 @@ def build_state() -> cm.State:
   return state
 
 
-def graphics_loop(state: cm.State) -> None:
+def graphics_loop(state: cm.State) -> tuple[cm.EpisodeTerminationReason, list[cm.Action]]:
   screen = sprites.setup_screen()
   clock = pg.time.Clock()
 
@@ -71,19 +74,21 @@ def graphics_loop(state: cm.State) -> None:
     ),
   ])
 
+  actions_taken = []
   while True:
     for event in pg.event.get():
       if event.type == pg.QUIT:
-        return
+        return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
       if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
-        return
+        return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
 
     if state.time > EPISODE_TIME:
-      print(f"Episode ended after {EPISODE_TIME}")
-      return
+      print(f'Episode ended after {EPISODE_TIME}')
+      return cm.EpisodeTerminationReason.REACHED_TIME_LIMIT, actions_taken
 
     keys_pressed = pg.key.get_pressed()
     action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
+    actions_taken.append(action)
     state.spaceship.apply_action(action, time_step=SEC_PER_FRAME)
 
     celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)
@@ -91,7 +96,13 @@ def graphics_loop(state: cm.State) -> None:
     for collision_ex in celestial_exceptions:
       print(collision_ex)
       if isinstance(collision_ex.obj, cm.Spaceship):
-        return
+        if isinstance(collision_ex, cm.CollisionException):
+          return cm.EpisodeTerminationReason.SPACESHIP_COLLISION, actions_taken
+        elif isinstance(collision_ex, cm.LostInSpaceException):
+          return cm.EpisodeTerminationReason.SPACESHIP_LOST, actions_taken
+        else:
+          collision_ex.add_note("Unknown exception type!")
+          raise collision_ex
     fast_update_sprites.update()
     if state.n_updates % 10 == 0:
       slow_update_sprites.update()
@@ -103,11 +114,31 @@ def graphics_loop(state: cm.State) -> None:
 
 
 def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--save_to', action='store', help='JSON filename to which the game will be recorded')
+  parser.add_argument('--load_from', action='store', help='JSON filename from which the game will be read')
+  args = parser.parse_args()
+
   state = build_state()
-  graphics_loop(state)
-  print(f"Final return: {state.rl_return:.3f}")
+  if args.save_to:
+    initial_state = copy.deepcopy(state)
+
+  termination_reason, actions_taken = graphics_loop(state)
+
+  print(f'Final return: {state.rl_return:.3f}')
+  pg.quit()
+
+  if args.save_to:
+    print(f'Saving to {args.save_to}...')
+    with open(args.save_to, 'w') as f:
+      episode = cm.RecordedEpisode(
+        initial_state=initial_state,
+        final_state=state,
+        actions_taken=actions_taken,
+        termination_reason=termination_reason
+      )
+      f.write(json.dumps(episode.to_json_dict(), indent=2))
 
 
 if __name__ == '__main__':
   main()
-  pg.quit()
