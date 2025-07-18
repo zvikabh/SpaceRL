@@ -3,7 +3,7 @@ import copy
 import datetime
 import json
 import math
-from typing import cast
+from typing import cast, Optional
 
 import pygame as pg
 
@@ -49,7 +49,21 @@ def build_state() -> cm.State:
   return state
 
 
-def graphics_loop(state: cm.State) -> tuple[cm.EpisodeTerminationReason, list[cm.Action]]:
+def graphics_loop(
+    state: cm.State, recorded_actions: Optional[list[cm.Action]]
+) -> tuple[cm.EpisodeTerminationReason, list[cm.Action]]:
+  """Main graphics loop.
+
+  Args:
+    state: Initial state, will be modified.
+    recorded_actions: Optional.
+      If specified, replays the given actions (no user input allowed other than abort).
+      If None, user input controls spaceship.
+
+  Returns:
+    termination_reason: Reason for game end.
+    actions_taken: List of all actions taken during the game.
+  """
   screen = sprites.setup_screen()
   clock = pg.time.Clock()
 
@@ -75,6 +89,7 @@ def graphics_loop(state: cm.State) -> tuple[cm.EpisodeTerminationReason, list[cm
   ])
 
   actions_taken = []
+  n_frames = 0
   while True:
     for event in pg.event.get():
       if event.type == pg.QUIT:
@@ -86,8 +101,12 @@ def graphics_loop(state: cm.State) -> tuple[cm.EpisodeTerminationReason, list[cm
       print(f'Episode ended after {EPISODE_TIME}')
       return cm.EpisodeTerminationReason.REACHED_TIME_LIMIT, actions_taken
 
-    keys_pressed = pg.key.get_pressed()
-    action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
+    if recorded_actions:
+      action = recorded_actions[n_frames]
+    else:
+      keys_pressed = pg.key.get_pressed()
+      action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
+
     actions_taken.append(action)
     state.spaceship.apply_action(action, time_step=SEC_PER_FRAME)
 
@@ -111,6 +130,7 @@ def graphics_loop(state: cm.State) -> tuple[cm.EpisodeTerminationReason, list[cm
     slow_update_sprites.draw(screen)
     pg.display.flip()
     clock.tick(SEC_PER_FRAME * 1000)
+    n_frames += 1
 
 
 def main():
@@ -119,11 +139,19 @@ def main():
   parser.add_argument('--load_from', action='store', help='JSON filename from which the game will be read')
   args = parser.parse_args()
 
-  state = build_state()
+  if args.load_from:
+    print(f"Reading episode from {args.load_from}...")
+    with open(args.load_from, 'rt') as f:
+      json_dict = json.load(f)
+      episode = cm.RecordedEpisode.from_json_dict(json_dict)
+      state = episode.initial_state
+  else:
+    state = build_state()
+
   if args.save_to:
     initial_state = copy.deepcopy(state)
 
-  termination_reason, actions_taken = graphics_loop(state)
+  termination_reason, actions_taken = graphics_loop(state, episode.actions_taken if args.load_from else None)
 
   print(f'Final return: {state.rl_return:.3f}')
   pg.quit()

@@ -6,6 +6,7 @@ import enum
 import math
 from typing import Any, Optional, Sequence
 
+import dacite
 import pygame as pg
 
 
@@ -137,6 +138,11 @@ class Action:
   def to_char(self) -> str:
     return str(self.left_thruster * 2 + self.right_thruster)
 
+  @classmethod
+  def from_char(cls, str) -> 'Action':
+    n = int(str)
+    return cls(left_thruster=bool(n//2), right_thruster=bool(n%2))
+
 
 @dataclasses.dataclass
 class Spaceship(SpaceObject):
@@ -166,7 +172,7 @@ class Spaceship(SpaceObject):
 class State:
   spaceship: Spaceship
   target: CelestialBody
-  other_objects: list[SpaceObject]
+  other_objects: list[CelestialBody]
   time: datetime.timedelta = datetime.timedelta(seconds=0)
   rl_return: float = 0.
   rl_discounted_return: float = 0.
@@ -231,3 +237,18 @@ class RecordedEpisode:
       'actions_taken': ''.join(action.to_char() for action in self.actions_taken),
       'termination_reason': self.termination_reason.name
     }
+
+  @classmethod
+  def from_json_dict(cls, json_dict: dict[str, Any]) -> 'RecordedEpisode':
+    dacite_config = dacite.Config(
+      type_hooks={
+        tuple[int, int, int]: tuple,
+        datetime.timedelta: lambda s: datetime.timedelta(seconds=s),
+      }
+    )
+    return RecordedEpisode(
+      initial_state=dacite.from_dict(State, json_dict['initial_state'], config=dacite_config),
+      final_state=dacite.from_dict(State, json_dict['final_state'], config=dacite_config),
+      actions_taken=[Action.from_char(c) for c in json_dict['actions_taken']],
+      termination_reason=EpisodeTerminationReason[json_dict['termination_reason']]
+    )
