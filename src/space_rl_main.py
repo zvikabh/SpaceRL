@@ -49,8 +49,8 @@ def build_state() -> cm.State:
   return state
 
 
-def graphics_loop(
-    state: cm.State, recorded_actions: Optional[list[cm.Action]]
+def game_loop(
+    state: cm.State, recorded_actions: Optional[list[cm.Action]], with_graphics: bool = True
 ) -> tuple[cm.EpisodeTerminationReason, list[cm.Action]]:
   """Main graphics loop.
 
@@ -59,43 +59,46 @@ def graphics_loop(
     recorded_actions: Optional.
       If specified, replays the given actions (no user input allowed other than abort).
       If None, user input controls spaceship.
+    with_graphics: If False, nothing will be shown on screen. Used to compute outcome of recorded_actions.
 
   Returns:
     termination_reason: Reason for game end.
     actions_taken: List of all actions taken during the game.
   """
-  screen = sprites.setup_screen()
-  clock = pg.time.Clock()
+  if with_graphics:
+    screen = sprites.setup_screen()
+    clock = pg.time.Clock()
 
-  fast_update_sprites = pg.sprite.Group()
-  slow_update_sprites = pg.sprite.Group()
-  all_sprites = [
-    sprites.CelestialBodySprite(body=cast(cm.CelestialBody, body), sprite_groups=[fast_update_sprites])
-    for body in state.other_objects
-  ]
-  all_sprites.extend([
-    sprites.CelestialBodySprite(
-      body=state.target,
-      sprite_groups=[fast_update_sprites],
-    ),
-    sprites.SpaceshipSprite(
-      spaceship=state.spaceship,
-      sprite_groups=[fast_update_sprites],
-    ),
-    sprites.InfoboxSprite(
-      state=state,
-      sprite_groups=[slow_update_sprites],
-    ),
-  ])
+    fast_update_sprites = pg.sprite.Group()
+    slow_update_sprites = pg.sprite.Group()
+    all_sprites = [
+      sprites.CelestialBodySprite(body=cast(cm.CelestialBody, body), sprite_groups=[fast_update_sprites])
+      for body in state.other_objects
+    ]
+    all_sprites.extend([
+      sprites.CelestialBodySprite(
+        body=state.target,
+        sprite_groups=[fast_update_sprites],
+      ),
+      sprites.SpaceshipSprite(
+        spaceship=state.spaceship,
+        sprite_groups=[fast_update_sprites],
+      ),
+      sprites.InfoboxSprite(
+        state=state,
+        sprite_groups=[slow_update_sprites],
+      ),
+    ])
 
   actions_taken = []
   n_frames = 0
   while True:
-    for event in pg.event.get():
-      if event.type == pg.QUIT:
-        return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
-      if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
-        return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
+    if with_graphics:
+      for event in pg.event.get():
+        if event.type == pg.QUIT:
+          return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
+        if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+          return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
 
     if state.time > EPISODE_TIME:
       print(f'Episode ended after {EPISODE_TIME}')
@@ -122,14 +125,17 @@ def graphics_loop(
         else:
           collision_ex.add_note("Unknown exception type!")
           raise collision_ex
-    fast_update_sprites.update()
-    if state.n_updates % 10 == 0:
-      slow_update_sprites.update()
-    screen.fill(sprites.BACKGROUND_COLOR)
-    fast_update_sprites.draw(screen)
-    slow_update_sprites.draw(screen)
-    pg.display.flip()
-    clock.tick(SEC_PER_FRAME * 1000)
+
+    if with_graphics:
+      fast_update_sprites.update()
+      if state.n_updates % 10 == 0:
+        slow_update_sprites.update()
+      screen.fill(sprites.BACKGROUND_COLOR)
+      fast_update_sprites.draw(screen)
+      slow_update_sprites.draw(screen)
+      pg.display.flip()
+      clock.tick(SEC_PER_FRAME * 1000)
+
     n_frames += 1
 
 
@@ -137,6 +143,7 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--save_to', action='store', help='JSON filename to which the game will be recorded')
   parser.add_argument('--load_from', action='store', help='JSON filename from which the game will be read')
+  parser.add_argument('--no_graphics', action='store_true', help='If specified, computes outcome without showing anything')
   args = parser.parse_args()
 
   if args.load_from:
@@ -151,9 +158,15 @@ def main():
   if args.save_to:
     initial_state = copy.deepcopy(state)
 
-  termination_reason, actions_taken = graphics_loop(state, episode.actions_taken if args.load_from else None)
+  start_time = datetime.datetime.now()
+  termination_reason, actions_taken = game_loop(
+    state, episode.actions_taken if args.load_from else None, with_graphics=not args.no_graphics
+  )
+  end_time = datetime.datetime.now()
 
   print(f'Final return: {state.rl_return:.3f}')
+  if args.no_graphics:
+    print(f'Computation time: {end_time - start_time}')
   pg.quit()
 
   if args.save_to:

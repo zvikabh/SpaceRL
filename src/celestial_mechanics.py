@@ -226,7 +226,7 @@ def _dict_factory(fields):
 @dataclasses.dataclass
 class RecordedEpisode:
   initial_state: State
-  final_state: State
+  final_state: Optional[State]
   actions_taken: list[Action]
   termination_reason: EpisodeTerminationReason
 
@@ -246,9 +246,14 @@ class RecordedEpisode:
         datetime.timedelta: lambda s: datetime.timedelta(seconds=s),
       }
     )
+    initial_state = dacite.from_dict(State, json_dict['initial_state'], config=dacite_config)
+    if 'final_state' in json_dict:
+      final_state = dacite.from_dict(State, json_dict['final_state'], config=dacite_config)
+    else:
+      final_state = None
     return RecordedEpisode(
-      initial_state=dacite.from_dict(State, json_dict['initial_state'], config=dacite_config),
-      final_state=dacite.from_dict(State, json_dict['final_state'], config=dacite_config),
+      initial_state=initial_state,
+      final_state=final_state,
       actions_taken=[Action.from_char(c) for c in json_dict['actions_taken']],
       termination_reason=EpisodeTerminationReason[json_dict['termination_reason']]
     )
