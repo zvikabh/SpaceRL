@@ -14,6 +14,7 @@ import pygame as pg
 UNIVERSE_RECT = pg.Rect(0, 0, 1280*1e6, 1024*1e6)
 UNIVERSE_SIZE = max(UNIVERSE_RECT.width, UNIVERSE_RECT.height)
 GRAVITATIONAL_CONSTANT = 6e-11
+SCALE = 1e6  # meters per pixel
 
 # Spaceship charactersitics
 MAX_LANDING_SPEED = 10000  # m/sec
@@ -22,6 +23,15 @@ SPACESHIP_THRUST = 1.2e14  # Newton
 
 # RL constants
 DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
+EPISODE_TIME = datetime.timedelta(seconds=60)
+SEC_PER_FRAME = 0.04
+
+
+class EpisodeTerminationReason(enum.Enum):
+  USER_ABORT = 'user_abort'
+  SPACESHIP_COLLISION = 'spaceship_collision'
+  SPACESHIP_LOST = 'spaceship_lost'
+  REACHED_TIME_LIMIT = 'reached_time_limit'
 
 
 class CelestialException(Exception):
@@ -29,6 +39,9 @@ class CelestialException(Exception):
 
   def __init__(self, obj: 'SpaceObject') -> None:
     self.obj = obj
+
+  def termination_reason(self):
+    raise NotImplementedError()
 
 
 class CollisionException(CelestialException):
@@ -44,6 +57,9 @@ class CollisionException(CelestialException):
       f"with impact velocity {self.obj.velocity.norm/1e3:.0f} km/s."
     )
 
+  def termination_reason(self):
+    return EpisodeTerminationReason.SPACESHIP_COLLISION
+
 
 class LostInSpaceException(CelestialException):
   """Raised by an object if it has gone beyond the bounds of the known universe."""
@@ -53,6 +69,9 @@ class LostInSpaceException(CelestialException):
 
   def __str__(self) -> str:
     return f"{self.obj.name} has been lost in space."
+
+  def termination_reason(self):
+    return EpisodeTerminationReason.SPACESHIP_LOST
 
 
 @dataclasses.dataclass
@@ -149,8 +168,12 @@ class Action:
     return str(self.left_thruster * 2 + self.right_thruster)
 
   @classmethod
-  def from_char(cls, str) -> 'Action':
-    n = int(str)
+  def from_char(cls, s: str) -> 'Action':
+    return cls.from_int(int(s))
+
+  @classmethod
+  def from_int(cls, n: int) -> 'Action':
+    assert 0 <= n <= 3
     return cls(left_thruster=bool(n//2), right_thruster=bool(n%2))
 
 
@@ -215,7 +238,7 @@ class State:
         celestial_exceptions.append(ex)
     return celestial_exceptions
 
-  def update_returns(self, celestial_exceptions: Sequence[CelestialException], time_step: float) -> None:
+  def update_returns(self, celestial_exceptions: Sequence[CelestialException], time_step: float) -> float:
     dist = (self.spaceship.position - self.target.position).norm
     reward_per_sec = 1e6 / dist
     reward = reward_per_sec * time_step
@@ -226,13 +249,41 @@ class State:
 
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
+    return reward
 
 
-class EpisodeTerminationReason(enum.Enum):
-  USER_ABORT = 'user_abort'
-  SPACESHIP_COLLISION = 'spaceship_collision'
-  SPACESHIP_LOST = 'spaceship_lost'
-  REACHED_TIME_LIMIT = 'reached_time_limit'
+def build_initial_state() -> State:
+  state = State(
+    spaceship=Spaceship(
+      mass=SPACESHIP_MASS,
+      position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height * 0.1),
+      velocity=Vector(0, 0),
+      name='Spaceship',
+      angle=-math.pi * 0.5,
+      angular_velocity=0,
+    ),
+    target=CelestialBody(
+      mass=1.5e34,
+      position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height / 2),
+      velocity=Vector(0, 0),
+      name='Earth',
+      radius=SCALE * 60,
+      color=(0, 100, 255),
+    ),
+    other_objects=[
+      CelestialBody(
+        mass=1e33,
+        position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height * 0.2),
+        velocity=Vector(5e7, 0),
+        name='Luna',
+        radius=SCALE * 20,
+        color=(128, 128, 128),
+      ),
+    ]
+  )
+  # Keep the center of mass stationary
+  state.target.velocity = state.other_objects[0].velocity * (-state.other_objects[0].mass / state.target.mass)
+  return state
 
 
 def _dict_factory(fields):

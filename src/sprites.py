@@ -9,8 +9,7 @@ import celestial_mechanics as cm
 
 
 # Display constants
-SCALE = 1e6  # meters per pixel
-SCREEN_RECT = pg.Rect(0, 0, cm.UNIVERSE_RECT.width/SCALE, cm.UNIVERSE_RECT.height/SCALE)
+SCREEN_RECT = pg.Rect(0, 0, cm.UNIVERSE_RECT.width/cm.SCALE, cm.UNIVERSE_RECT.height/cm.SCALE)
 BACKGROUND_COLOR = (0, 0, 0)
 
 
@@ -19,16 +18,19 @@ class CelestialBodySprite(pg.sprite.Sprite):
   def __init__(self, body: cm.CelestialBody, sprite_groups: Sequence[pg.sprite.Group]):
     super().__init__(*sprite_groups)
     self.body = body
-    diameter_pixels = int(self.body.radius * 2 / SCALE + 1)
+    diameter_pixels = int(self.body.radius * 2 / cm.SCALE + 1)
     self.image = pg.Surface((diameter_pixels, diameter_pixels), pg.SRCALPHA)
     pg.draw.circle(
-      self.image, self.body.color, (self.body.radius / SCALE, self.body.radius / SCALE), self.body.radius / SCALE
+      self.image,
+      self.body.color,
+      (self.body.radius / cm.SCALE, self.body.radius / cm.SCALE),
+      self.body.radius / cm.SCALE
     )
     self.rect = self.image.get_rect()
     self.update()
 
   def update(self):
-    self.rect.center = (self.body.position.x / SCALE, self.body.position.y / SCALE)
+    self.rect.center = (self.body.position.x / cm.SCALE, self.body.position.y / cm.SCALE)
 
 
 class SpaceshipSprite(pg.sprite.Sprite):
@@ -48,7 +50,7 @@ class SpaceshipSprite(pg.sprite.Sprite):
       which_img = 0
     self.image = pg.transform.rotate(self.orig_imgs[which_img], -self.ship.angle * 180 / math.pi - 90)
     self.rect = self.image.get_rect()
-    self.rect.center = (self.ship.position.x / SCALE, self.ship.position.y / SCALE)
+    self.rect.center = (self.ship.position.x / cm.SCALE, self.ship.position.y / cm.SCALE)
 
   def _setup_rocket_imgs(self) -> None:
     main_dir = os.path.split(os.path.abspath(__file__))[0]

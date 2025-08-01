@@ -2,51 +2,12 @@ import argparse
 import copy
 import datetime
 import json
-import math
 from typing import cast, Optional
 
 import pygame as pg
 
 import celestial_mechanics as cm
 import sprites
-
-
-SEC_PER_FRAME = 0.04
-EPISODE_TIME = datetime.timedelta(seconds=60)
-
-
-def build_state() -> cm.State:
-  state = cm.State(
-    spaceship=cm.Spaceship(
-      mass=cm.SPACESHIP_MASS,
-      position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.1),
-      velocity=cm.Vector(0, 0),
-      name='Spaceship',
-      angle=-math.pi * 0.5,
-      angular_velocity=0,
-    ),
-    target=cm.CelestialBody(
-      mass=1.5e34,
-      position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height / 2),
-      velocity=cm.Vector(0, 0),
-      name='Earth',
-      radius=sprites.SCALE * 60,
-      color=(0, 100, 255),
-    ),
-    other_objects=[
-      cm.CelestialBody(
-        mass=1e33,
-        position=cm.Vector(cm.UNIVERSE_RECT.width / 2, cm.UNIVERSE_RECT.height * 0.2),
-        velocity=cm.Vector(5e7, 0),
-        name='Luna',
-        radius=sprites.SCALE * 20,
-        color=(128, 128, 128),
-      ),
-    ]
-  )
-  # Keep the center of mass stationary
-  state.target.velocity = state.other_objects[0].velocity * (-state.other_objects[0].mass / state.target.mass)
-  return state
 
 
 def game_loop(
@@ -99,8 +60,8 @@ def game_loop(
         if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
           return cm.EpisodeTerminationReason.USER_ABORT, actions_taken
 
-    if state.time > EPISODE_TIME:
-      print(f'Episode ended after {EPISODE_TIME}')
+    if state.time > cm.EPISODE_TIME:
+      print(f'Episode ended after {cm.EPISODE_TIME}')
       return cm.EpisodeTerminationReason.REACHED_TIME_LIMIT, actions_taken
 
     if recorded_actions:
@@ -110,10 +71,10 @@ def game_loop(
       action = cm.Action(left_thruster=keys_pressed[pg.K_LEFT], right_thruster=keys_pressed[pg.K_RIGHT])
 
     actions_taken.append(action)
-    state.spaceship.apply_action(action, time_step=SEC_PER_FRAME)
+    state.spaceship.apply_action(action, time_step=cm.SEC_PER_FRAME)
 
-    celestial_exceptions = state.update_positions(time_step=SEC_PER_FRAME)
-    state.update_returns(celestial_exceptions, time_step=SEC_PER_FRAME)
+    celestial_exceptions = state.update_positions(time_step=cm.SEC_PER_FRAME)
+    state.update_returns(celestial_exceptions, time_step=cm.SEC_PER_FRAME)
     for collision_ex in celestial_exceptions:
       print(collision_ex)
       if isinstance(collision_ex.obj, cm.Spaceship):
@@ -133,7 +94,7 @@ def game_loop(
       fast_update_sprites.draw(screen)
       slow_update_sprites.draw(screen)
       pg.display.flip()
-      clock.tick(SEC_PER_FRAME * 1000)
+      clock.tick(cm.SEC_PER_FRAME * 1000)
 
 
 def main():
@@ -150,7 +111,7 @@ def main():
       episode = cm.RecordedEpisode.from_json_dict(json_dict)
       state = episode.initial_state
   else:
-    state = build_state()
+    state = cm.build_initial_state()
 
   if args.save_to:
     initial_state = copy.deepcopy(state)
