@@ -109,6 +109,7 @@ def main():
     with open(args.load_from, 'rt') as f:
       json_dict = json.load(f)
       episode = cm.RecordedEpisode.from_json_dict(json_dict)
+      print(f"Expected game duration: {episode.final_state.time}")
       state = episode.initial_state
   else:
     state = cm.build_initial_state()
@@ -122,6 +123,7 @@ def main():
   )
   end_time = datetime.datetime.now()
 
+  print(f"Game duration: {state.time}")
   print(f'Final return: {state.rl_return:.3f}')
   if args.no_graphics:
     print(f'Computation time: {end_time - start_time}')
