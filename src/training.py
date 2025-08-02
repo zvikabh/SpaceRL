@@ -304,16 +304,43 @@ def main():
     '--save_best_episode_every', action='store', default=20, type=int,
     help='If nonzero, store the best episode once every N batches'
   )
+  parser.add_argument(
+    '--save_checkpoint_every', action='store', default=20, type=int,
+    help='If nonzero, store a checkpoint once every N batches'
+  )
+  parser.add_argument(
+    '--load_checkpoint', action='store', default=None,
+    help='If specified, loads the initial checkpoint from this file'
+  )
   args = parser.parse_args()
 
   os.makedirs('episodes', exist_ok=True)
+  os.makedirs('checkpoints', exist_ok=True)
 
   network = ActorCriticNetwork()
   optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
   scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_DECAY_RATE)
-  for i in range(1000):
-    save_best = (args.save_best_episode_every and (i % args.save_best_episode_every == 0))
-    ppo_update_loop(network, optimizer, scheduler, batch_num=i, save_best_episode=save_best)
+
+  start_iteration = 0
+  if args.load_checkpoint:
+    checkpoint = torch.load(args.load_checkpoint)
+    network.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    scheduler.load_state_dict(checkpoint['scheduler'])
+    start_iteration = checkpoint['batch_num']
+
+  for i in range(start_iteration, 1000):
+    save_episode = (args.save_best_episode_every and (i % args.save_best_episode_every == 0))
+    save_ckpt = (args.save_checkpoint_every and (i % args.save_checkpoint_every == 0))
+    ppo_update_loop(network, optimizer, scheduler, batch_num=i, save_best_episode=save_episode)
+    if save_ckpt:
+      checkpoint = {
+        'batch_num': i,
+        'model': network.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
+      }
+      torch.save(checkpoint, f'checkpoints/batch_{i:6d}.ckpt')
 
 
 if __name__ == '__main__':
