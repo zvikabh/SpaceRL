@@ -340,7 +340,7 @@ def main():
         'optimizer': optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
       }
-      torch.save(checkpoint, f'checkpoints/batch_{i:6d}.ckpt')
+      torch.save(checkpoint, f'checkpoints/batch_{i:06d}.ckpt')
 
 
 if __name__ == '__main__':

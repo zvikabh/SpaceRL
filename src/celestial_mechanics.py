@@ -20,7 +20,7 @@ SCALE = 1e6  # meters per pixel
 MAX_LANDING_SPEED = 10000  # m/sec
 SPACESHIP_MASS = 1e6  # kg
 SPACESHIP_THRUST = 1.2e14  # Newton
-THRUSTER_COST_PER_SECOND = 0.01  # In reward units
+THRUSTER_COST_PER_SECOND = 0.03  # In reward units
 
 # RL constants
 DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
