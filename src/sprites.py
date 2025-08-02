@@ -64,7 +64,7 @@ class SpaceshipSprite(pg.sprite.Sprite):
 
 
 class InfoboxSprite(pg.sprite.Sprite):
-  NUM_LINES = 5
+  NUM_LINES = 6
   LINE_HEIGHT = 20
   LINE_WIDTH = 250
 
@@ -84,15 +84,16 @@ class InfoboxSprite(pg.sprite.Sprite):
   def update(self):
     self.image.fill((0, 0, 0))
     self.blit_text_line(f"Return: {self.state.rl_return:.3f}", 0)
-    self.blit_text_line(f"Velocity: {self.state.spaceship.velocity.norm / 1000:.0f} km/s", 1)
+    self.blit_text_line(f"Fuel cost: {self.state.fuel_cost:.3f}", 1)
+    self.blit_text_line(f"Velocity: {self.state.spaceship.velocity.norm / 1000:.0f} km/s", 2)
     dist_from_target = (self.state.spaceship.position - self.state.target.position).norm
-    self.blit_text_line(f"Distance from Target: {dist_from_target / 1000:.0f} km", 2)
+    self.blit_text_line(f"Distance from Target: {dist_from_target / 1000:.0f} km", 3)
     rounded_time = datetime.timedelta(seconds=int(self.state.time.total_seconds()))
-    self.blit_text_line(f"Time: {rounded_time}", 4)
+    self.blit_text_line(f"Time: {rounded_time}", 5)
     if self.last_update_time:
       cur_time = datetime.datetime.now()
       fps = (self.state.n_updates - self.last_shown_frame) / (cur_time - self.last_update_time).total_seconds()
-      self.blit_text_line(f"FPS: {fps:.1f}", 3)
+      self.blit_text_line(f"FPS: {fps:.1f}", 4)
       self.last_update_time = cur_time
       self.last_shown_frame = self.state.n_updates
     else:

@@ -20,6 +20,7 @@ SCALE = 1e6  # meters per pixel
 MAX_LANDING_SPEED = 10000  # m/sec
 SPACESHIP_MASS = 1e6  # kg
 SPACESHIP_THRUST = 1.2e14  # Newton
+THRUSTER_COST_PER_SECOND = 0.01  # In reward units
 
 # RL constants
 DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
@@ -189,6 +190,10 @@ class Action:
     assert 0 <= n <= 3
     return cls(left_thruster=bool(n//2), right_thruster=bool(n%2))
 
+  @property
+  def cost_per_second(self) -> float:
+    return (self.left_thruster + self.right_thruster) * THRUSTER_COST_PER_SECOND
+
 
 @dataclasses.dataclass
 class Spaceship(SpaceObject):
@@ -233,6 +238,7 @@ class State:
   target: CelestialBody
   other_objects: list[CelestialBody]
   time: datetime.timedelta = datetime.timedelta(seconds=0)
+  fuel_cost: float = 0.
   rl_return: float = 0.
   rl_discounted_return: float = 0.
   n_updates: int = 0
@@ -261,15 +267,19 @@ class State:
         celestial_exceptions.append(ex)
     return celestial_exceptions
 
-  def update_returns(self, celestial_exceptions: Sequence[CelestialException], time_step: float) -> float:
+  def update_returns(self, action: Action, celestial_exceptions: Sequence[CelestialException], time_step: float) -> float:
     dist = (self.spaceship.position - self.target.position).norm
     reward_per_sec = 1e6 / dist
     reward = reward_per_sec * time_step
+
+    cur_fuel_cost = action.cost_per_second * time_step
+    reward -= action.cost_per_second * time_step
 
     for collision_ex in celestial_exceptions:
       if isinstance(collision_ex.obj, Spaceship):
         reward -= 1  # Spaceship lost.
 
+    self.fuel_cost += cur_fuel_cost
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
     return reward

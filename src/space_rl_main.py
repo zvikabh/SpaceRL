@@ -74,7 +74,7 @@ def game_loop(
     state.spaceship.apply_action(action, time_step=cm.SEC_PER_FRAME)
 
     celestial_exceptions = state.update_positions(time_step=cm.SEC_PER_FRAME)
-    state.update_returns(celestial_exceptions, time_step=cm.SEC_PER_FRAME)
+    state.update_returns(action, celestial_exceptions, time_step=cm.SEC_PER_FRAME)
     for collision_ex in celestial_exceptions:
       print(collision_ex)
       if isinstance(collision_ex.obj, cm.Spaceship):

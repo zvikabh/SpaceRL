@@ -186,7 +186,7 @@ def play_single_episode(
       action = cm.Action.from_int(action_int)
       state.spaceship.apply_action(action, time_step=cm.SEC_PER_FRAME)
       celestial_exceptions = state.update_positions(time_step=cm.SEC_PER_FRAME)
-      reward = state.update_returns(celestial_exceptions, time_step=cm.SEC_PER_FRAME)
+      reward = state.update_returns(action, celestial_exceptions, time_step=cm.SEC_PER_FRAME)
       step_results.append(
         EpisodeStepResult(
           state_tensor=state_vec,
@@ -301,8 +301,8 @@ def ppo_update_loop(
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
-    '--save_best_episode_every', action='store', default=0, type=int,
-    help='If specified, store the best episode once every N batches'
+    '--save_best_episode_every', action='store', default=20, type=int,
+    help='If nonzero, store the best episode once every N batches'
   )
   args = parser.parse_args()
 
@@ -312,7 +312,7 @@ def main():
   optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
   scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_DECAY_RATE)
   for i in range(1000):
-    save_best = (args.store_best_episode_every and (i % args.store_best_episode_every == 0))
+    save_best = (args.save_best_episode_every and (i % args.save_best_episode_every == 0))
     ppo_update_loop(network, optimizer, scheduler, batch_num=i, save_best_episode=save_best)
 
 
