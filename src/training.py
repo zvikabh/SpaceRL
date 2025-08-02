@@ -20,7 +20,7 @@ import celestial_mechanics as cm
 STATE_VECTOR_LEN = 15
 
 # Number of episodes to generate and train on per epoch.
-BATCH_SIZE = 100
+BATCH_SIZE = 10
 
 # o3 says that it's a good idea to train over all batch results a few times before creating a new batch.
 # I guess this makes sense since the network is improving but still vaguely similar to the original episodes.
@@ -36,7 +36,7 @@ MAX_GRAD_NORM = 0.5
 
 # PPO parameters
 CLIP_EPS = 0.05  # epsilon for clipping in the PPO policy surrogate loss.
-VALUE_LOSS_IMPORTANCE = 1  # Relative importance of the value loss component, usually in [0.5, 1].
+VALUE_LOSS_IMPORTANCE = 0.5  # Relative importance of the value loss component, usually in [0.5, 1].
 ENTROPY_BONUS_IMPORTANCE = 0.01  # Increase this to encourage more exploration.
 
 
@@ -184,7 +184,12 @@ def play_single_episode(
   return step_results, termination_reason
 
 
-def ppo_update_loop(network: ActorCriticNetwork, show_timing_info: bool = False):
+def ppo_update_loop(
+        network: ActorCriticNetwork,
+        optimizer: torch.optim.Optimizer,
+        batch_num: Optional[int] = None,
+        show_timing_info: bool = False
+):
   # Collect data for current model.
   with Timer('Data collection', disable=not show_timing_info):
     episodes, termination_reasons = zip(*[play_single_episode(network) for _ in range(BATCH_SIZE)])
@@ -199,16 +204,10 @@ def ppo_update_loop(network: ActorCriticNetwork, show_timing_info: bool = False)
   advantages = torch.tensor([step.advantage for step in all_steps], dtype=torch.float32)
   returns = advantages + values
 
-  print(
-    f'Avg return: {returns.mean():.3f}, Avg steps per episode: {len(all_steps)/len(episodes):.1f}, '
-    f'Termination reasons: {termination_reasons}'
-  )
-
   # Normalize advantages tensor
   advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-7)
 
   # Optimize
-  optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
   with Timer('Training', disable=not show_timing_info):
     for epoch in range(EPOCHS_PER_BATCH):
       idx = torch.randperm(len(all_steps))
@@ -239,7 +238,16 @@ def ppo_update_loop(network: ActorCriticNetwork, show_timing_info: bool = False)
         optimizer.step()
 
   # Summary stats
-
+  batch_str = f'#{batch_num}: ' if batch_num is not None else ''
+  loss_str = (
+    f'Loss {loss:+6.4f} (P: {policy_loss:+6.4f}, V: {value_loss*VALUE_LOSS_IMPORTANCE:+6.4f}, '
+    f'E: {-mb_entropy*ENTROPY_BONUS_IMPORTANCE:+6.4f})'
+  )
+  print(
+    f'{batch_str}{loss_str}, Avg return: {returns.mean():.3f}, '
+    f'Avg steps: {len(all_steps)/len(episodes):.1f}, '
+    f'Termination: {termination_reasons}'
+  )
 
 
 def main():
@@ -252,8 +260,9 @@ def main():
 
   print('\n\n')
 
-  for _ in tqdm.tqdm(range(100)):
-    ppo_update_loop(network)
+  optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
+  for i in range(1000):
+    ppo_update_loop(network, optimizer, batch_num=i)
 
 
 if __name__ == '__main__':
