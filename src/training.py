@@ -1,7 +1,9 @@
+import argparse
 import collections
 import dataclasses
 import datetime
 import json
+import os
 from typing import Optional
 
 import torch
@@ -21,23 +23,24 @@ import celestial_mechanics as cm
 STATE_VECTOR_LEN = 15
 
 # Number of episodes to generate and train on per epoch.
-BATCH_SIZE = 10
+BATCH_SIZE = 32
 
 # o3 says that it's a good idea to train over all batch results a few times before creating a new batch.
 # I guess this makes sense since the network is improving but still vaguely similar to the original episodes.
 # Collecting the data indeed takes about 100x more time than training a single epoch.
-EPOCHS_PER_BATCH = 3
+EPOCHS_PER_BATCH = 10
 
 # Number of steps on which to train simultaneously.
 MINIBATCH_SIZE = 2048
 
 # Optimizer settings
 LEARNING_RATE = 3e-4
+LR_DECAY_RATE = 0.999
 MAX_GRAD_NORM = 0.5
 
 # PPO parameters
 CLIP_EPS = 0.05  # epsilon for clipping in the PPO policy surrogate loss.
-VALUE_LOSS_IMPORTANCE = 0.5  # Relative importance of the value loss component, usually in [0.5, 1].
+VALUE_LOSS_IMPORTANCE = 1  # Relative importance of the value loss component, usually in [0.5, 1].
 ENTROPY_BONUS_IMPORTANCE = 0.01  # Increase this to encourage more exploration.
 
 
@@ -124,15 +127,17 @@ class ActorCriticNetwork(nn.Module):
       nn.Linear(STATE_VECTOR_LEN, 256),
       nn.ReLU(),
       nn.Linear(256, 64),
-      nn.ReLU()
+      nn.ReLU(),
+      nn.Linear(64, 32),
+      nn.ReLU(),
     )
 
     # Actor head: outputs action logits.
     # There are 4 possible actions: idle, right, left, both.
-    self.actor_head = nn.Linear(64, 4)
+    self.actor_head = nn.Linear(32, 4)
 
     # Critic head: outputs a single value (the state-value)
-    self.critic_head = nn.Linear(64, 1)
+    self.critic_head = nn.Linear(32, 1)
 
   def forward(self, state):
     r"""Forward pass in the actor-critic model.
@@ -219,6 +224,7 @@ def play_single_episode(
 def ppo_update_loop(
         network: ActorCriticNetwork,
         optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
         batch_num: Optional[int] = None,
         show_timing_info: bool = False,
         save_best_episode: bool = False,
@@ -233,7 +239,7 @@ def ppo_update_loop(
     best_idx, best_episode = max(enumerate(episodes), key=lambda ep: sum(step.reward for step in ep[1]))
     best_episode_termination_reason = termination_reasons[best_idx]
     recorded_episode = episode_steps_to_recorded_episode(best_episode, best_episode_termination_reason)
-    with open(f'best_episode_{batch_num:06d}.json', 'w') as f:
+    with open(f'episodes/best_episode_{batch_num:06d}.json', 'w') as f:
       json.dump(recorded_episode.to_json_dict(), f)
 
   # Convert to tensors. All tensors have shape=(n_steps,) unless otherwise specified.
@@ -277,6 +283,8 @@ def ppo_update_loop(
         torch.nn.utils.clip_grad_norm_(network.parameters(), MAX_GRAD_NORM)
         optimizer.step()
 
+  scheduler.step()
+
   # Summary stats
   batch_str = f'#{batch_num}: ' if batch_num is not None else ''
   loss_str = (
@@ -291,10 +299,21 @@ def ppo_update_loop(
 
 
 def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+    '--save_best_episode_every', action='store', default=0, type=int,
+    help='If specified, store the best episode once every N batches'
+  )
+  args = parser.parse_args()
+
+  os.makedirs('episodes', exist_ok=True)
+
   network = ActorCriticNetwork()
   optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
+  scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=LR_DECAY_RATE)
   for i in range(1000):
-    ppo_update_loop(network, optimizer, batch_num=i, save_best_episode=True)
+    save_best = (args.store_best_episode_every and (i % args.store_best_episode_every == 0))
+    ppo_update_loop(network, optimizer, scheduler, batch_num=i, save_best_episode=save_best)
 
 
 if __name__ == '__main__':

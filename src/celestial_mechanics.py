@@ -268,7 +268,7 @@ class State:
 
     for collision_ex in celestial_exceptions:
       if isinstance(collision_ex.obj, Spaceship):
-        reward -= 0.1  # Spaceship lost.
+        reward -= 1  # Spaceship lost.
 
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
