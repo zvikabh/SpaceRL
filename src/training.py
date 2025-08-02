@@ -1,6 +1,7 @@
 import collections
 import dataclasses
 import datetime
+import json
 from typing import Optional
 
 import torch
@@ -31,7 +32,7 @@ EPOCHS_PER_BATCH = 3
 MINIBATCH_SIZE = 2048
 
 # Optimizer settings
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 3e-4
 MAX_GRAD_NORM = 0.5
 
 # PPO parameters
@@ -76,6 +77,37 @@ class EpisodeStepResult:
   state_value: float
   discounted_return: Optional[float] = None
   advantage: Optional[float] = None
+
+
+def state_vector_to_state(step: EpisodeStepResult) -> cm.State:
+  state_vector = step.state_tensor
+  if len(state_vector) != STATE_VECTOR_LEN:
+    raise ValueError(f'State vector must have length {STATE_VECTOR_LEN}, got {len(state_vector)}')
+
+  state = cm.build_initial_state()
+  state.spaceship.update_from_vector(state_vector[:6])
+  state.target.update_from_vector(state_vector[6:10])
+  state.other_objects[0].update_from_vector(state_vector[10:14])
+  state.time = datetime.timedelta(seconds=state_vector[14] * 60)
+  state.rl_discounted_return = step.discounted_return
+  return state
+
+
+def episode_steps_to_recorded_episode(
+        steps: list[EpisodeStepResult],
+        termination_reason: cm.EpisodeTerminationReason
+) -> cm.RecordedEpisode:
+    if not steps:
+        raise ValueError('Cannot convert empty step list to RecordedEpisode')
+    initial_state = state_vector_to_state(steps[0])
+    final_state = state_vector_to_state(steps[-1])
+    actions_taken = [cm.Action.from_int(step.action) for step in steps]
+    return cm.RecordedEpisode(
+      initial_state=initial_state,
+      final_state=final_state,
+      actions_taken=actions_taken,
+      termination_reason=termination_reason
+    )
 
 
 class ActorCriticNetwork(nn.Module):
@@ -188,13 +220,21 @@ def ppo_update_loop(
         network: ActorCriticNetwork,
         optimizer: torch.optim.Optimizer,
         batch_num: Optional[int] = None,
-        show_timing_info: bool = False
+        show_timing_info: bool = False,
+        save_best_episode: bool = False,
 ):
   # Collect data for current model.
   with Timer('Data collection', disable=not show_timing_info):
     episodes, termination_reasons = zip(*[play_single_episode(network) for _ in range(BATCH_SIZE)])
     all_steps = sum(episodes, start=[])
-    termination_reasons = collections.Counter([tr.name for tr in termination_reasons])
+    termination_reasons_cnt = collections.Counter([tr.name for tr in termination_reasons])
+
+  if save_best_episode:
+    best_idx, best_episode = max(enumerate(episodes), key=lambda ep: sum(step.reward for step in ep[1]))
+    best_episode_termination_reason = termination_reasons[best_idx]
+    recorded_episode = episode_steps_to_recorded_episode(best_episode, best_episode_termination_reason)
+    with open(f'best_episode_{batch_num:06d}.json', 'w') as f:
+      json.dump(recorded_episode.to_json_dict(), f)
 
   # Convert to tensors. All tensors have shape=(n_steps,) unless otherwise specified.
   states = torch.tensor([step.state_tensor for step in all_steps], dtype=torch.float32)  # shape=(n_steps, STATE_VECTOR_LEN)
@@ -246,23 +286,15 @@ def ppo_update_loop(
   print(
     f'{batch_str}{loss_str}, Avg return: {returns.mean():.3f}, '
     f'Avg steps: {len(all_steps)/len(episodes):.1f}, '
-    f'Termination: {termination_reasons}'
+    f'Termination: {termination_reasons_cnt}'
   )
 
 
 def main():
   network = ActorCriticNetwork()
-  with Timer('Episode'):
-    episode, termination_reason = play_single_episode(network, verbose=True)
-  print(f'Terminated after {len(episode)} steps: {termination_reason}')
-  print(f'Discounted return at t=0: {episode[0].discounted_return:.3f}')
-  print(f'Rewards: {[step.reward for step in episode]}')
-
-  print('\n\n')
-
   optimizer = torch.optim.Adam(network.parameters(), lr=LEARNING_RATE)
   for i in range(1000):
-    ppo_update_loop(network, optimizer, batch_num=i)
+    ppo_update_loop(network, optimizer, batch_num=i, save_best_episode=True)
 
 
 if __name__ == '__main__':

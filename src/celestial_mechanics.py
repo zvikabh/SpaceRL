@@ -103,8 +103,12 @@ class Vector:
     return math.sqrt(self.squared_norm)
 
   def to_vector(self) -> list[float]:
-    # Normalize to [0,1] while keeping pixels square.
     return [self.x, self.y]
+
+  @classmethod
+  def from_vector(cls, vector: Sequence[float]) -> 'Vector':
+    assert len(vector) == 2
+    return cls(vector[0], vector[1])
 
 
 @dataclasses.dataclass
@@ -114,10 +118,19 @@ class SpaceObject:
   velocity: Vector  # meters/sec
   name: str
 
+  @classmethod
+  def state_vector_len(cls) -> int:
+    return 4
+
   def to_vector(self) -> list[float]:
     normalized_pos = self.position / UNIVERSE_SIZE
     normalized_v = self.velocity / 1e9
     return normalized_pos.to_vector() + normalized_v.to_vector()
+
+  def update_from_vector(self, vector: Sequence[float]) -> None:
+    assert len(vector) == 4
+    self.position = Vector.from_vector(vector[:2]) * UNIVERSE_SIZE
+    self.velocity = Vector.from_vector(vector[2:]) * 1e9
 
   def update_self(self, all_objects: Sequence['SpaceObject'], time_step: float) -> None:
     """
@@ -183,8 +196,18 @@ class Spaceship(SpaceObject):
   angular_velocity: float  # Radians per second
   last_action: Optional[Action] = None  # used for plotting the thruster flames
 
+  @classmethod
+  def state_vector_len(cls) -> int:
+    return super().state_vector_len() + 2
+
   def to_vector(self) -> list[float]:
     return super().to_vector() + [self.angle % (2*math.pi), self.angular_velocity]
+
+  def update_from_vector(self, vector: Sequence[float]) -> None:
+    assert len(vector) == self.state_vector_len()
+    super().update_from_vector(vector[:4])
+    self.angle = vector[4]
+    self.angular_velocity = vector[5]
 
   def update_self(self, all_objects: Sequence[SpaceObject], time_step: float) -> None:
     self.angle += self.angular_velocity * time_step
@@ -245,7 +268,7 @@ class State:
 
     for collision_ex in celestial_exceptions:
       if isinstance(collision_ex.obj, Spaceship):
-        reward -= 1  # Spaceship lost.
+        reward -= 0.1  # Spaceship lost.
 
     self.rl_return += reward
     self.rl_discounted_return = self.rl_discounted_return * DISCOUNT_FACTOR + reward
