@@ -119,8 +119,8 @@ class ActorCriticNetwork(nn.Module):
     body_output = self.shared_body(state)
     action_logits = self.actor_head(body_output)
     state_value = self.critic_head(body_output).squeeze(-1)
-    action_dist = Categorical(logits=action_logits)
-    return action_dist, state_value
+    # action_dist = Categorical(logits=action_logits)
+    return action_logits, state_value
 
 
 def load_checkpoint(
@@ -172,6 +172,8 @@ def play_single_episode(
     lam: Lambda value for the Generalized Advantage Estimator.
     verbose: If True, print debug output.
   """
+  scripted_network = torch.jit.script(network)
+  scripted_network.eval()
   state = copy.deepcopy(initial_state)
   step_results: list[EpisodeStepResult] = []
   with torch.no_grad():  # We are using this to generate episode data, not to train.
@@ -182,7 +184,8 @@ def play_single_episode(
         termination_reason = cm.EpisodeTerminationReason.REACHED_TIME_LIMIT
         break
       state_vec = state.to_vector()
-      action_dist, state_value = network(torch.tensor(state_vec))
+      action_logits, state_value = scripted_network(torch.tensor(state_vec))
+      action_dist = Categorical(logits=action_logits)
       action_int = action_dist.sample().item()
       action = cm.Action.from_int(action_int)
       state.spaceship.apply_action(action, time_step=cm.SEC_PER_FRAME)
