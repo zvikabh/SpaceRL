@@ -7,6 +7,7 @@ from typing import cast, Optional
 import pygame as pg
 
 import celestial_mechanics as cm
+import rl_model
 import sprites
 
 
@@ -102,25 +103,35 @@ def main():
   parser.add_argument('--save_to', action='store', help='JSON filename to which the game will be recorded')
   parser.add_argument('--load_from', action='store', help='JSON filename from which the game will be read')
   parser.add_argument('--no_graphics', action='store_true', help='If specified, computes outcome without showing anything')
+  parser.add_argument('--use_checkpoint', action='store', help='If specified, shows a model\'s actions on a new game')
   args = parser.parse_args()
+
+  if args.load_from and args.use_checkpoint:
+    raise RuntimeError('Cannot specify both --load_from and --use_checkpoint')
 
   if args.load_from:
     print(f"Reading episode from {args.load_from}...")
     with open(args.load_from, 'rt') as f:
       json_dict = json.load(f)
       episode = cm.RecordedEpisode.from_json_dict(json_dict)
+      actions_taken = episode.actions_taken
       print(f"Expected game duration: {episode.final_state.time}")
       state = episode.initial_state
   else:
     state = cm.build_initial_state()
+    actions_taken = None
+
+  if args.use_checkpoint:
+    model, _, _, _ = rl_model.load_checkpoint(args.use_checkpoint)
+    episode, _ = rl_model.play_single_episode(model, state)
+    actions_taken = [cm.Action.from_int(step.action) for step in episode]
+    print(f"Expected game duration: {datetime.timedelta(seconds=len(episode)*cm.SEC_PER_FRAME)}")
 
   if args.save_to:
     initial_state = copy.deepcopy(state)
 
   start_time = datetime.datetime.now()
-  termination_reason, actions_taken = game_loop(
-    state, episode.actions_taken if args.load_from else None, with_graphics=not args.no_graphics
-  )
+  termination_reason, actions_taken = game_loop(state, actions_taken, with_graphics=not args.no_graphics)
   end_time = datetime.datetime.now()
 
   print(f"Game duration: {state.time}")
