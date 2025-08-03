@@ -4,6 +4,7 @@ import dataclasses
 import datetime
 import enum
 import math
+import random
 from typing import Any, Optional, Sequence
 
 import dacite
@@ -17,10 +18,11 @@ GRAVITATIONAL_CONSTANT = 6e-11
 SCALE = 1e6  # meters per pixel
 
 # Spaceship charactersitics
-MAX_LANDING_SPEED = 10000  # m/sec
 SPACESHIP_MASS = 1e6  # kg
 SPACESHIP_THRUST = 1.2e14  # Newton
 THRUSTER_COST_PER_SECOND = 0.03  # In reward units
+MAX_INITIAL_VELOCITY = 1e7  # m/s
+MAX_INITIAL_ANGULAR_VELOCITY = math.pi/8  # rad/sec
 
 # RL constants
 DISCOUNT_FACTOR = 0.99  # TODO: Normalize per time_step
@@ -221,9 +223,9 @@ class Spaceship(SpaceObject):
   def apply_action(self, action: Action, time_step: float) -> None:
     self.last_action = action
     if action.left_thruster and not action.right_thruster:
-      self.angular_velocity -= 0.05
+      self.angular_velocity -= 0.1
     elif action.right_thruster and not action.left_thruster:
-      self.angular_velocity += 0.05
+      self.angular_velocity += 0.1
 
     thrust = (action.left_thruster + action.right_thruster)/2 * SPACESHIP_THRUST
     acceleration = thrust / self.mass
@@ -286,18 +288,30 @@ class State:
 
 
 def build_initial_state() -> State:
+  w = UNIVERSE_RECT.width
+  h = UNIVERSE_RECT.height
+  ship_pos = Vector(
+    random.random() * 0.5*w + 0.1*w,
+    random.random() * 0.5*h + 0.1*h
+  )
+  if ship_pos.x > 0.4*w:
+    ship_pos.x += 0.2*w
+  if ship_pos.y > 0.4*h:
+    ship_pos.y += 0.2*h
+
   state = State(
     spaceship=Spaceship(
       mass=SPACESHIP_MASS,
-      position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height * 0.1),
-      velocity=Vector(0, 0),
+      position=ship_pos,
+      velocity=Vector(random.random() * MAX_INITIAL_VELOCITY * 2 - MAX_INITIAL_VELOCITY,
+                      random.random() * MAX_INITIAL_VELOCITY * 2 - MAX_INITIAL_VELOCITY,),
       name='Spaceship',
-      angle=-math.pi * 0.5,
-      angular_velocity=0,
+      angle=0,  # Changed later
+      angular_velocity=random.random() * MAX_INITIAL_ANGULAR_VELOCITY,
     ),
     target=CelestialBody(
       mass=1.5e34,
-      position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height / 2),
+      position=Vector(w/2, h/2),
       velocity=Vector(0, 0),
       name='Earth',
       radius=SCALE * 60,
@@ -306,7 +320,7 @@ def build_initial_state() -> State:
     other_objects=[
       CelestialBody(
         mass=1e33,
-        position=Vector(UNIVERSE_RECT.width / 2, UNIVERSE_RECT.height * 0.2),
+        position=Vector(w/2, h*0.2),
         velocity=Vector(5e7, 0),
         name='Luna',
         radius=SCALE * 20,
@@ -314,8 +328,16 @@ def build_initial_state() -> State:
       ),
     ]
   )
-  # Keep the center of mass stationary
+
+  # Keep the center of mass of Earth and Luna stationary
   state.target.velocity = state.other_objects[0].velocity * (-state.other_objects[0].mass / state.target.mass)
+
+  # Point the ship away from Earth
+  dx = state.spaceship.position.x - state.target.position.x
+  dy = state.spaceship.position.y - state.target.position.y
+  angle = math.atan2(dy, dx)
+  state.spaceship.angle = angle + random.random() * math.pi*.8 - math.pi*.4
+
   return state
 
 

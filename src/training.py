@@ -23,7 +23,7 @@ import celestial_mechanics as cm
 STATE_VECTOR_LEN = 15
 
 # Number of episodes to generate and train on per epoch.
-BATCH_SIZE = 32
+BATCH_SIZE = 50
 
 # o3 says that it's a good idea to train over all batch results a few times before creating a new batch.
 # I guess this makes sense since the network is improving but still vaguely similar to the original episodes.
@@ -129,6 +129,8 @@ class ActorCriticNetwork(nn.Module):
       nn.Linear(256, 64),
       nn.ReLU(),
       nn.Linear(64, 32),
+      nn.ReLU(),
+      nn.Linear(32, 32),
       nn.ReLU(),
     )
 
